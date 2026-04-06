@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conecta .md Converter</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.155/pdf.min.mjs" type="module"></script>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --blue: #0F3BFE;
+            --green: #C0F58B;
+            --gray: #646B6B;
+            --bg-dark: #1E1E2E;
+            --bg-card: #2A2A3C;
+            --bg-input: #353548;
+            --text: #FFFFFF;
+            --text-secondary: #B0B0B0;
+            --border: #444460;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            padding: 32px 16px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 700px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .header h1 {
+            color: var(--green);
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border-radius: 10px;
+            padding: 18px 20px;
+            margin-bottom: 12px;
+        }
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .card-title { font-size: 14px; font-weight: 700; }
+        .card-info { font-size: 12px; color: var(--text-secondary); }
+
+        .dropzone {
+            border: 2px dashed var(--border);
+            border-radius: 8px;
+            padding: 32px 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.2s, background 0.2s;
+        }
+        .dropzone:hover, .dropzone.dragover {
+            border-color: var(--green);
+            background: rgba(192, 245, 139, 0.05);
+        }
+        .dropzone p { color: var(--text-secondary); font-size: 13px; margin-top: 6px; }
+        .dropzone strong { color: var(--green); font-size: 14px; }
+
+        .file-list {
+            list-style: none;
+            max-height: 150px;
+            overflow-y: auto;
+            background: var(--bg-input);
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            margin-top: 10px;
+            display: none;
+        }
+        .file-list.visible { display: block; }
+        .file-list li {
+            padding: 6px 12px;
+            font-size: 13px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            border-bottom: 1px solid var(--border);
+        }
+        .file-list li:last-child { border-bottom: none; }
+
+        .btn-row { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+
+        .btn {
+            border: none;
+            border-radius: 6px;
+            padding: 9px 18px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            font-family: inherit;
+            transition: filter 0.15s;
+        }
+        .btn:hover { filter: brightness(1.1); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; filter: none; }
+
+        .btn-blue { background: var(--blue); color: var(--text); }
+        .btn-green { background: var(--green); color: #1a1a1a; }
+        .btn-gray { background: var(--gray); color: var(--text); }
+
+        .progress-wrap {
+            margin-top: 14px;
+            display: none;
+        }
+        .progress-wrap.visible { display: block; }
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: var(--bg-card);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            width: 0%;
+            background: var(--green);
+            border-radius: 4px;
+            transition: width 0.3s;
+        }
+        .status {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 6px;
+        }
+
+        .overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.6);
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        .overlay.visible { display: flex; }
+        .modal {
+            background: var(--bg-dark);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 32px 36px;
+            text-align: center;
+            min-width: 380px;
+        }
+        .modal h2 {
+            color: var(--green);
+            font-size: 20px;
+            margin-bottom: 24px;
+        }
+        .modal .btn-row { justify-content: center; }
+
+        input[type="file"] { display: none; }
+
+        .footer {
+            text-align: center;
+            margin-top: 32px;
+            padding-top: 16px;
+        }
+        .footer a {
+            color: var(--text-secondary);
+            font-size: 13px;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+        .footer a:hover {
+            color: var(--green);
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>Conversor da Conecta: transforme seus arquivos .PDF para .MD</h1>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Arquivos PDF</span>
+            <span class="card-info" id="fileCount">Nenhum arquivo selecionado</span>
+        </div>
+
+        <div class="dropzone" id="dropzone">
+            <strong>Arraste seus PDFs aqui</strong>
+            <p>ou clique para selecionar</p>
+        </div>
+        <input type="file" id="fileInput" accept=".pdf" multiple>
+
+        <ul class="file-list" id="fileList"></ul>
+
+        <div class="btn-row">
+            <button class="btn btn-blue" id="btnSelect">Selecionar PDFs</button>
+            <button class="btn btn-gray" id="btnClear">Limpar</button>
+        </div>
+    </div>
+
+    <div style="display:flex; justify-content:flex-end; margin-top:4px;">
+        <button class="btn btn-green" id="btnConvert" disabled>Converter</button>
+    </div>
+
+    <div class="progress-wrap" id="progressWrap">
+        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+        <div class="status" id="status">Pronto</div>
+    </div>
+
+    <div class="footer">
+<span>Conheça mais sobre a Conecta em conecta.inc</span>
+    </div>
+</div>
+
+<div class="overlay" id="overlay">
+    <div class="modal">
+        <h2>Trabalho concluído!</h2>
+        <div class="btn-row">
+            <button class="btn btn-blue" id="btnBack">Voltar para o conversor</button>
+            <button class="btn btn-green" id="btnDownloadAll">Baixar todos os arquivos</button>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+    const pdfjsLib = await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.155/pdf.min.mjs');
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.9.155/pdf.worker.min.mjs';
+
+    let pdfFiles = [];
+    let convertedFiles = [];
+
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('fileInput');
+    const fileList = document.getElementById('fileList');
+    const fileCount = document.getElementById('fileCount');
+    const btnSelect = document.getElementById('btnSelect');
+    const btnClear = document.getElementById('btnClear');
+    const btnConvert = document.getElementById('btnConvert');
+    const progressWrap = document.getElementById('progressWrap');
+    const progressFill = document.getElementById('progressFill');
+    const status = document.getElementById('status');
+    const overlay = document.getElementById('overlay');
+    const btnBack = document.getElementById('btnBack');
+    const btnDownloadAll = document.getElementById('btnDownloadAll');
+
+    function addFiles(files) {
+        for (const f of files) {
+            if (f.type === 'application/pdf' && !pdfFiles.some(e => e.name === f.name && e.size === f.size)) {
+                pdfFiles.push(f);
+            }
+        }
+        renderFileList();
+    }
+
+    function renderFileList() {
+        fileList.innerHTML = '';
+        pdfFiles.forEach(f => {
+            const li = document.createElement('li');
+            li.textContent = f.name;
+            fileList.appendChild(li);
+        });
+        fileList.classList.toggle('visible', pdfFiles.length > 0);
+        fileCount.textContent = pdfFiles.length
+            ? `${pdfFiles.length} arquivo(s) selecionado(s)`
+            : 'Nenhum arquivo selecionado';
+        btnConvert.disabled = pdfFiles.length === 0;
+    }
+
+    btnSelect.addEventListener('click', () => fileInput.click());
+    dropzone.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => { addFiles(fileInput.files); fileInput.value = ''; });
+
+    dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragover'); });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+    dropzone.addEventListener('drop', e => {
+        e.preventDefault();
+        dropzone.classList.remove('dragover');
+        addFiles(e.dataTransfer.files);
+    });
+
+    btnClear.addEventListener('click', () => {
+        pdfFiles = [];
+        convertedFiles = [];
+        renderFileList();
+        progressWrap.classList.remove('visible');
+        progressFill.style.width = '0%';
+        status.textContent = 'Pronto';
+    });
+
+    function detectHeadingLevel(fontSize, baseSize) {
+        if (baseSize <= 0) return null;
+        const ratio = fontSize / baseSize;
+        if (ratio >= 2.0) return 1;
+        if (ratio >= 1.6) return 2;
+        if (ratio >= 1.3) return 3;
+        if (ratio >= 1.15) return 4;
+        return null;
+    }
+
+    function formatText(str, fontName) {
+        const s = str.trim();
+        if (!s) return '';
+        const isBold = /bold/i.test(fontName);
+        const isItalic = /italic|oblique/i.test(fontName);
+        if (isBold && isItalic) return `***${s}***`;
+        if (isBold) return `**${s}**`;
+        if (isItalic) return `*${s}*`;
+        return s;
+    }
+
+    function detectListPrefix(text) {
+        let m = text.match(/^[\u2022\u2023\u25E6\u2043\u2219\u25CF\u25CB\u25AA\u25AB•·\-–—]\s*/);
+        if (m) return ['- ', text.slice(m[0].length)];
+        m = text.match(/^(\d{1,3})[.)]\s*/);
+        if (m) return [`${m[1]}. `, text.slice(m[0].length)];
+        m = text.match(/^([a-zA-Z])[.)]\s*/);
+        if (m) return [`${m[1]}. `, text.slice(m[0].length)];
+        return ['', text];
+    }
+
+    async function convertPdfToMd(file) {
+        const buffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+
+        const fontSizeCount = {};
+        for (let p = 1; p <= pdf.numPages; p++) {
+            const page = await pdf.getPage(p);
+            const content = await page.getTextContent();
+            for (const item of content.items) {
+                if (!item.str || !item.str.trim()) continue;
+                const sz = Math.round(item.transform[0] * 10) / 10;
+                fontSizeCount[sz] = (fontSizeCount[sz] || 0) + item.str.trim().length;
+            }
+        }
+        let baseSize = 12;
+        let maxCount = 0;
+        for (const [sz, count] of Object.entries(fontSizeCount)) {
+            if (count > maxCount) { maxCount = count; baseSize = parseFloat(sz); }
+        }
+
+        const mdLines = [];
+        for (let p = 1; p <= pdf.numPages; p++) {
+            if (p > 1) mdLines.push('\n---\n');
+
+            const page = await pdf.getPage(p);
+            const content = await page.getTextContent();
+
+            let currentBlock = [];
+            let blockHeading = null;
+            let lastY = null;
+
+            function flushBlock() {
+                const text = currentBlock.join(' ').trim();
+                if (!text) { currentBlock = []; blockHeading = null; return; }
+
+                const [listPrefix, remaining] = detectListPrefix(text);
+
+                if (blockHeading !== null) {
+                    mdLines.push(`\n${'#'.repeat(blockHeading)} ${text}\n`);
+                } else if (listPrefix) {
+                    mdLines.push(`${listPrefix}${remaining}`);
+                } else {
+                    mdLines.push('');
+                    mdLines.push(text);
+                }
+                currentBlock = [];
+                blockHeading = null;
+            }
+
+            for (const item of content.items) {
+                if (item.str === undefined) continue;
+
+                const y = Math.round(item.transform[5]);
+                const fontSize = Math.abs(item.transform[0]);
+
+                if (lastY !== null && Math.abs(y - lastY) > fontSize * 0.8) {
+                    flushBlock();
+                }
+                lastY = y;
+
+                const formatted = formatText(item.str, item.fontName || '');
+                if (!formatted) continue;
+
+                const hl = detectHeadingLevel(fontSize, baseSize);
+                if (hl !== null && formatted.length < 200) {
+                    blockHeading = hl;
+                }
+
+                currentBlock.push(formatted);
+            }
+            flushBlock();
+        }
+
+        let result = mdLines.join('\n');
+        result = result.replace(/\n{4,}/g, '\n\n\n');
+        return result.trim() + '\n';
+    }
+
+    btnConvert.addEventListener('click', async () => {
+        btnConvert.disabled = true;
+        convertedFiles = [];
+        progressWrap.classList.add('visible');
+        progressFill.style.width = '0%';
+
+        const total = pdfFiles.length;
+        let errors = 0;
+
+        for (let i = 0; i < total; i++) {
+            const file = pdfFiles[i];
+            status.textContent = `Convertendo ${file.name}... (${i + 1}/${total})`;
+            try {
+                const md = await convertPdfToMd(file);
+                const mdName = file.name.replace(/\.pdf$/i, '.md');
+                convertedFiles.push({ name: mdName, content: md });
+            } catch (e) {
+                console.error(`Erro ao converter ${file.name}:`, e);
+                errors++;
+            }
+            progressFill.style.width = `${((i + 1) / total) * 100}%`;
+        }
+
+        if (errors > 0) {
+            status.textContent = `Concluído com ${errors} erro(s).`;
+        } else {
+            status.textContent = `Concluído! ${total} arquivo(s) convertido(s) com sucesso.`;
+        }
+
+        btnConvert.disabled = false;
+        overlay.classList.add('visible');
+    });
+
+    btnBack.addEventListener('click', () => {
+        overlay.classList.remove('visible');
+    });
+
+    btnDownloadAll.addEventListener('click', () => {
+        for (const file of convertedFiles) {
+            const blob = new Blob([file.content], { type: 'text/markdown;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = file.name;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+        overlay.classList.remove('visible');
+    });
+</script>
+
+</body>
+</html>
